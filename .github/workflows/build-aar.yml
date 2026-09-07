@@ -20,42 +20,36 @@ jobs:
         uses: nttld/setup-ndk@v1
         with:
           ndk-version: r25c
-
-      # --- BARU: naikkan versi xray-core ke rilis resmi terbaru SEBELUM build ---
-      # Tanpa langkah ini, go.mod/go.sum yang sudah ter-commit di repo dipakai
-      # apa adanya -> hasil build selalu versi yang sama walau workflow di-run
-      # ulang berkali-kali (ini penyebab xray.aar kamu masih v26.3.27 terus).
-      - name: Update xray-core dependency to latest
-        run: |
-          go get -u github.com/xtls/xray-core@latest
-          go mod tidy
+        id: ndk
 
       - name: Install gomobile
         run: |
-          go mod tidy
           go install golang.org/x/mobile/cmd/gomobile@latest
           go install golang.org/x/mobile/cmd/gobind@latest
           gomobile init
 
-      - name: Build AAR
+      # --- GANTI: pakai script build RESMI libXray, bukan `gomobile bind` manual ---
+      # Script ini yang menentukan & mengunci versi Xray-core yang sudah teruji
+      # kompatibel dengan kode wrapper di repo ini (dibaca dari
+      # build/app/build.py -> DEFAULT_XRAY_CORE_TAG), jadi TIDAK akan
+      # menghasilkan mismatch seperti "package .../common/geodata tidak
+      # ditemukan" yang terjadi waktu kita coba `go get -u @latest` manual.
+      #
+      # Kalau step ini gagal dengan "No such file or directory: build/main.py",
+      # itu tandanya fork ini belum di-sync dengan upstream XTLS/libXray --
+      # sync fork dulu (tombol "Sync fork" di GitHub, atau
+      # `git fetch upstream && git merge upstream/main`) sebelum run ulang.
+      - name: Build AAR (script resmi libXray)
+        env:
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+          ANDROID_HOME: ${{ steps.ndk.outputs.ndk-path }}
         run: |
-          gomobile bind -v -androidapi 21 -ldflags="-s -w -checklinkname=0" -target=android -o xray.aar .
-
-      # --- BARU: commit balik go.mod/go.sum yang sudah naik versi, biar next
-      # build (atau siapa pun yang baca repo) tahu versi xray-core yang dipakai
-      # bukan cuma "nempel" di satu run doang.
-      - name: Commit updated go.mod/go.sum
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add go.mod go.sum
-          git diff --cached --quiet && echo "Tidak ada perubahan dependency" || git commit -m "chore: bump xray-core dependency"
-          git push
+          python3 build/main.py android
 
       - name: Upload xray.aar Artifact
         uses: actions/upload-artifact@v4
         with:
           name: xray-aar
           path: |
-            xray.aar
-            xray-sources.jar
+            **/xray.aar
+            **/xray-sources.jar
