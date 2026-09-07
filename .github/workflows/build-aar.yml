@@ -39,10 +39,16 @@ jobs:
       # itu tandanya fork ini belum di-sync dengan upstream XTLS/libXray --
       # sync fork dulu (tombol "Sync fork" di GitHub, atau
       # `git fetch upstream && git merge upstream/main`) sebelum run ulang.
+      # PENTING: JANGAN override ANDROID_HOME ke path NDK -- ANDROID_HOME
+      # harus tetap ke Android SDK bawaan runner (yang sudah punya folder
+      # platforms/android-XX & build-tools/). Kalau ANDROID_HOME ikut
+      # ditimpa ke path NDK (kesalahan versi sebelumnya), gomobile akan
+      # cari folder "platforms" di dalam folder NDK dan gagal dengan
+      # "failed to find android SDK platform: ... no such file or
+      # directory" -- NDK dan SDK itu dua hal terpisah.
       - name: Build AAR (script resmi libXray)
         env:
           ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
-          ANDROID_HOME: ${{ steps.ndk.outputs.ndk-path }}
         run: |
           python3 build/main.py android
 
